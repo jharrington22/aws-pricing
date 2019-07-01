@@ -47,63 +47,42 @@ for region in aws_region:
         "EC2" : {}
     }
 
-
-# price_list = {}
-# NextTokenKey = ""
-# while True:
-#     pl = pricing.get_products(
-#     ServiceCode='AmazonEC2',
-#     Filters=[
-#         {'Type':'TERM_MATCH', 'Field':'operatingSystem', 'Value':'Linux'}
-#         # {'Type':'TERM_MATCH', 'Field':'location', 'Value':region_short_names[aws_region_value]}
-#     ],
-#     NextToken=NextTokenKey
-#         )
-#     if "PriceList" in price_list:
-#         price_list["PriceList"] = price_list["PriceList"] + pl["PriceList"]
-#     else:
-#         price_list["PriceList"] = pl["PriceList"]
-#     try:
-#         NextTokenKey = pl["NextToken"]
-#     except KeyError:
-#         break
-
+   
 paginator = pricing_client.get_paginator('get_products')
-resp_pages = paginator.paginate(ServiceCode="AmazonEC2", 
-                                        Filters=[
-                                            {'Type':'TERM_MATCH', 'Field':'operatingSystem', 'Value':'Linux'}
-                                            ])
+resp_pages = paginator.paginate(ServiceCode="AmazonEC2")
+                                        # Filters=[
+                                        #     {'Type':'TERM_MATCH', 'Field':'operatingSystem', 'Value':'Linux'}
+                                       #    ])
 for page in resp_pages:
     for item in page["PriceList"]:
         price_item = json.loads(item)
-        region = list(region_short_names.keys())[list(region_short_names.values()).index(price_item["product"]["attributes"]["location"])] 
+        # if "location"in price_item["product"]["attributes"]:
+            
         terms = price_item["terms"]
-        # if "instanceType" not in price_item["product"]["attributes"]:
-        #     not_instance_type.append(price_item)
-        #     next
-        # else:
-        #     instance_type = price_item["product"]["attributes"]["instanceType"]
-        if 'CPU Credits' not in price_item["product"]["productFamily"]:
+        if "instanceType" in price_item["product"]["attributes"]:
             instance_type = price_item["product"]["attributes"]["instanceType"]
+            region = list(region_short_names.keys())[list(region_short_names.values()).index(price_item["product"]["attributes"]["location"])]
+
             if "OnDemand" in terms:
+                
                 product_sku = terms["OnDemand"].keys()
                 product_sku = list(terms["OnDemand"].keys())
                 pd = terms["OnDemand"][product_sku[0]]["priceDimensions"]
         
-
                 product_price_sku = pd.keys()
                 product_price_sku = list(pd.keys())
                 price = pd[product_price_sku[0]]['pricePerUnit']["USD"]
         
-
                 description = pd[product_price_sku[0]]["description"]
-        
+
                 if not instance_type in resources[region]["EC2"]:
                     resources[region]["EC2"][instance_type] = {}
+
                 if not "OnDemand" in resources[region]["EC2"][instance_type]:
                     resources[region]["EC2"][instance_type]["OnDemand"] = {}
 
                 usageType = price_item["product"]["attributes"]["usagetype"]
+
                 if re.search(".*BoxUsage:{}".format(instance_type),usageType):
                     resources[region]["EC2"][instance_type]["OnDemand"] = {
                             "Description": description,
@@ -112,6 +91,8 @@ for page in resp_pages:
                             "Operating System": price_item["product"]["attributes"]["operatingSystem"],
                             "USD": price
                             } 
+
+
             if "Reserved" in terms:
                 product_sku = terms["Reserved"].keys()
                 product_sku = list(terms["Reserved"].keys())
@@ -182,5 +163,5 @@ for page in resp_pages:
                             for price_dimension in price_dimensions:
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["RateCode"] = price_dimensions[price_dimension]['rateCode']
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["USD"] = price_dimensions[price_dimension]['pricePerUnit']["USD"]
-                        
-pprint.pprint(resources["ca-central-1"]["EC2"]["t3.small"])
+
+pprint.pprint(resources["ca-central-1"]["EC2"])            
