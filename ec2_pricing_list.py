@@ -49,10 +49,14 @@ for region in aws_region:
 
    
 paginator = pricing_client.get_paginator('get_products')
-resp_pages = paginator.paginate(ServiceCode="AmazonEC2")
-                                        # Filters=[
-                                        #     {'Type':'TERM_MATCH', 'Field':'operatingSystem', 'Value':'Linux'}
-                                       #    ])
+resp_pages = paginator.paginate(ServiceCode="AmazonEC2",
+                                        Filters=[
+                                            {'Type':'TERM_MATCH', 'Field':'preInstalledSw', 'Value':'NA'},
+                                            {'Type':'TERM_MATCH', 'Field':'operatingSystem', 'Value':'Linux'},
+                                            {'Type':'TERM_MATCH', 'Field':'tenancy', 'Value':'Shared'},
+                                            {'Type':'TERM_MATCH', 'Field':'licenseModel', 'Value':'No License required'},
+                                            {'Type':'TERM_MATCH', 'Field':'capacitystatus', 'Value':'Used'}
+                                          ])
 for page in resp_pages:
     for item in page["PriceList"]:
         price_item = json.loads(item)
@@ -88,6 +92,7 @@ for page in resp_pages:
                             "Description": description,
                             "UsageType": price_item["product"]["attributes"]["usagetype"],
                             "Location": price_item["product"]["attributes"]["location"],
+                            "Tenancy": price_item["product"]["attributes"]["tenancy"],
                             "Operating System": price_item["product"]["attributes"]["operatingSystem"],
                             "USD": price
                             } 
@@ -164,4 +169,4 @@ for page in resp_pages:
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["RateCode"] = price_dimensions[price_dimension]['rateCode']
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["USD"] = price_dimensions[price_dimension]['pricePerUnit']["USD"]
 
-pprint.pprint(resources["ca-central-1"]["EC2"])            
+# pprint.pprint(resources)            
