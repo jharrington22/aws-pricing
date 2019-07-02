@@ -53,28 +53,6 @@ price_list = {}
 tokens = []
 token_count = 0
 
-# while True:
-#     pl = pricing_client.get_products(ServiceCode="AmazonEC2", 
-#                                         Filters=[
-#                                             {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'storage'}
-#                                             ])
-#     if "PriceList" in price_list:
-#         price_list["PriceList"] = price_list["PriceList"] + pl["PriceList"]
-        
-#     else:
-#         price_list["PriceList"] = pl["PriceList"]
-#     try:
-#         NextTokenKey = pl["NextToken"]
-#         if not NextTokenKey in tokens:
-#             tokens.append(NextTokenKey)
-#             token_count += 1
-#             print(token_count)
-#         else:
-#             print("Token already seen? {}".format(NextTokenKey))
-#             break
-#     except KeyError:
-#         break
-
 paginator = pricing_client.get_paginator('get_products')
 resp_pages = paginator.paginate(ServiceCode="AmazonEC2")
                                         # Filters=[
@@ -84,7 +62,6 @@ resp_pages = paginator.paginate(ServiceCode="AmazonEC2")
 # with open('ebs_pricing_file.json', 'w') as ebs_file:
 #     ebs_file.write(json.dumps(price_list["PriceList"]))
 
-# pprint.pprint(price_list)
 for page in resp_pages:
     for item in page["PriceList"]:
         price_item = json.loads(item)
@@ -116,4 +93,4 @@ for page in resp_pages:
                                 "Max Volume Size": price_item["product"]["attributes"]["maxVolumeSize"],
                                 "USD": price
                                 } 
-pprint.pprint(resources["ca-central-1"])
+pprint.pprint(resources)
