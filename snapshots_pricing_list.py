@@ -72,4 +72,6 @@ for page in resp_pages:
                             "Location": price_item["product"]["attributes"]["location"],
                             "USD": price
                             } 
-pprint.pprint(resources)
+
+with open('snapshots_price.json','w') as fp:
+    json.dump(resources,fp)
