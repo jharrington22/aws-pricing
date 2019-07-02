@@ -168,5 +168,5 @@ for page in resp_pages:
                             for price_dimension in price_dimensions:
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["RateCode"] = price_dimensions[price_dimension]['rateCode']
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["USD"] = price_dimensions[price_dimension]['pricePerUnit']["USD"]
-
-# pprint.pprint(resources)            
+with open('epl1.json', 'w+') as fp:
+   json.dump(resources,fp)           
