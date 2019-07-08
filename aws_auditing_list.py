@@ -10,13 +10,14 @@ from prettytable import PrettyTable
 
 #Creating Table
 x = PrettyTable()
-x.field_names = ["Region", "Instance_Type", "Count", "Price per hour", "Total Instances", "Total cost per month for the region"]
+x.field_names = ["Region", "Service", "Instance_Type", "Count", "Price per hour", "Total Instances", "Total cost per month"]
 x.align["Region"] = "l"
+x.align["Service"] = "l"
 x.align["Instance_Type"] = "l"
 x.align["Count"] = "l"
 x.align["Price per hour"] = "l"
 x.align["Total Instances"] = "l"
-x.align["Total cost per month for the region"] = "l"
+x.align["Total EC2 cost per month"] = "l"
 
 resource_path = 'resource_dict_snp.p'
 # To fix datetime object not serializable
@@ -35,15 +36,37 @@ recource_dict = {}
 count_region = {}
 snapshot_count_region = {}
 snap_vol_region = {}
+vol_cost_region = {}
+elb_cost_region = {}
+
+with open("ebs_pricing_list.json","r") as ebs:
+    vol_pricing = json.load(ebs)
+
+with open("elb_pricing.json","r") as elb:
+    elb_pricing = json.load(elb)
+
+with open('epl1.json', 'r') as fp:
+    pricing_json = json.load(fp)
+
+with open('snapshots_price.json', 'r') as fp:
+    snapshot_pricing = json.load(fp)
+
+
 for region in enabledRegions['Regions']:
     count_list = {}
     count = 0
     snap_vol = []
-
+    tv = 0
+    tvc = 0
     snapshot_count = 0
     orphaned_snapshot_count = 0
     snapshot_count_list = {}
-
+    total_volume_cost = 0
+    attached_instances = 0
+    unattached_instances = 0
+    total_instances = 0
+    total_elb_cost = 0
+    
     if os.path.exists(resource_path):
         exit
 
@@ -59,20 +82,39 @@ for region in enabledRegions['Regions']:
     count_region[region_name] = {}
     snapshot_count_region[region_name] = {}
     snap_vol_region[region_name] = {}
+    vol_cost_region[region_name] = {}
+    elb_cost_region[region_name] = {}
+
     # Create connections to AWS
     client = boto3.client('elb',region_name=region_name)
     ec2 = boto3.client('ec2', region_name=region_name)
 
-    #ELBs and their attached instances
-    # print("Collecting ELB recource")
-    # lb = client.describe_load_balancers()
-    # for l in lb['LoadBalancerDescriptions']:
-    #     recource_dict[region_name]["ELB"][l['LoadBalancerName']]  = {
-    #         "instanceId": []
-    #     }
-    #     for id in l['Instances']:
-    #         recource_dict[region_name]["ELB"][l['LoadBalancerName']]["instanceId"].append(id["InstanceId"])
+    # ELBs and their attached instances
+    print("Collecting ELB recource")
+    lb = client.describe_load_balancers()
+    for l in lb['LoadBalancerDescriptions']:
+        recource_dict[region_name]["ELB"][l['LoadBalancerName']]  = {
+            "instanceId": []
+        }
+        for id in l['Instances']:
+            recource_dict[region_name]["ELB"][l['LoadBalancerName']]["instanceId"].append(id["InstanceId"])
+    
+        if not len(recource_dict[region_name]["ELB"][l['LoadBalancerName']]["instanceId"]) > 0:
+            unattached_instances = unattached_instances + 1
+        if len(recource_dict[region_name]["ELB"][l['LoadBalancerName']]["instanceId"]) > 0:
+            attached_instances = attached_instances + 1
+            
+        total_instances = attached_instances + unattached_instances
 
+        for term in elb_pricing[region_name]['ELB']['OnDemand']:
+            elb_price = float(elb_pricing[region_name]['ELB']['OnDemand']['USD'])
+            total_elb_cost = round(float( elb_price * total_instances*744), 3)
+        
+        elb_cost_region[region_name] = {
+            "total_instances": total_instances,
+            "price": elb_price,
+            "total_elb_cost": total_elb_cost
+        }
 
     # Get all volumes for region_name and store in dict
     # print("Collecting EBS recource")
@@ -83,45 +125,54 @@ for region in enabledRegions['Regions']:
         recource_dict[region_name]["EBS"][vol_id] = {
             "state": vol["State"],
             "snapshots": [],
-            "size": vol["Size"]
+            "size": vol["Size"],
+            "volumeType": vol["VolumeType"]
         }
 
+        for vol_type in vol_pricing[region_name]['EBS']:
+            if recource_dict[region_name]["EBS"][vol_id]["volumeType"] in vol_type:
+                # print(vol_id)
+                volume_cost = float(vol_pricing[region_name]['EBS'][vol_type]['OnDemand']['USD'])
+                total_volume_cost = total_volume_cost + volume_cost
+        tv = total_volume_cost * 744
+        tvc = round(tv,3)
+    vol_cost_region[region_name] = { "Total Volume Cost": tvc}
+
+
     # Get all instances for region_name and store in dict
-    # print("Collecting EC2 recource")
-    # instance_ids = []
-    # instance_list = ec2.describe_instances()
-    # for r in  instance_list['Reservations']:
-    #     for i in r["Instances"]:
-    #         #instance_information = d['Instances']
-    #         id = i['InstanceId']
-    #         instance_ids.append(i['InstanceId'])
-    #         if "KeyName" in i:
-    #             key_name = i["KeyName"]
-    #         else:
-    #             key_name = ""
-    #         recource_dict[region_name]["EC2"][id] = {
-    #             "type": i['InstanceType'],
-    #             "key_name": key_name,
-    #             "launch_time": i['LaunchTime'],
-    #             "state": i['State']['Name'],
-    #             "volumes": []
-    #         }
+    print("Collecting EC2 recource")
+    instance_ids = []
+    instance_list = ec2.describe_instances()
+    for r in  instance_list['Reservations']:
+        for i in r["Instances"]:
+            #instance_information = d['Instances']
+            id = i['InstanceId']
+            instance_ids.append(i['InstanceId'])
+            if "KeyName" in i:
+                key_name = i["KeyName"]
+            else:
+                key_name = ""
+            recource_dict[region_name]["EC2"][id] = {
+                "type": i['InstanceType'],
+                "key_name": key_name,
+                "launch_time": i['LaunchTime'],
+                "state": i['State']['Name'],
+                "volumes": []
+            }
 
-    #         instance_type = i['InstanceType']
-    #         if not instance_type in count_list:
-    #             count_list[instance_type] = {"count" : 0}
+            instance_type = i['InstanceType']
+            if not instance_type in count_list:
+                count_list[instance_type] = {"count" : 0}
 
-    #         if instance_type in count_list:
-    #             count_list[instance_type]["count"] += 1
+            if instance_type in count_list:
+                count_list[instance_type]["count"] += 1
 
 
-    #         if len(i['BlockDeviceMappings']) > 0:
-    #             for vol in i['BlockDeviceMappings']:
-    #                 recource_dict[region_name]["EC2"][id]["volumes"].append(vol['Ebs']['VolumeId'])
+            if len(i['BlockDeviceMappings']) > 0:
+                for vol in i['BlockDeviceMappings']:
+                    recource_dict[region_name]["EC2"][id]["volumes"].append(vol['Ebs']['VolumeId'])
 
-    # count_region[region_name] = count_list
-    # # pprint.pprint(count_region)
-    # # pprint.pprint(recource_dict["ca-central-1"]["EC2"])
+    count_region[region_name] = count_list
 
 #   Get all snapshots and assign them to their volume
     # print("Collecting EBS snapshots")
@@ -139,66 +190,71 @@ for region in enabledRegions['Regions']:
             recource_dict[region_name]["EBS"]["orphaned_snapshots"].append(snapshot['SnapshotId'])
             orphaned_snapshot_count = orphaned_snapshot_count + 1
             snapshot_count_list["osc"] = {"orphaned_snapshot_count" : orphaned_snapshot_count}
-    snap_vol_region[region_name] = snap_vol   
-    # print(snapshot_count_list)
+    snap_vol_region[region_name] = snap_vol
     snapshot_count_region[region_name] = snapshot_count_list
-# pprint.pprint(snap_vol_region)
-# pprint.pprint(recource_dict)
-# Calculating the price of EC2 instances in each region for a month
 
-# with open('epl1.json', 'r') as fp:
-#     pricing_json = json.load(fp)
-
-# for region in count_region:
-#     x.add_row(["", "", "", "", "", ""])
-#     x.add_row(["", "", "", "", "", ""])
-#     x.add_row([region, "", "", "", "", ""])
-#     total_coi = 0
-#     total_cost = 0
-#     for i_types in count_region[region]:
-#         if i_types in (instance_type for instance_type in pricing_json[region]["EC2"]):
-
-#             count_of_instances_float = float(count_region[region][i_types]["count"])
-#             count_of_instances = round(count_of_instances_float, 3)
-
-#             price_float = float(pricing_json[region]["EC2"][i_types]["OnDemand"]["USD"])
-#             price = round(price_float, 3)
-            
-#             total_coi = total_coi + (count_region[region][i_types]["count"])
-#             total_cost_float = float(total_cost+(price*count_of_instances*744))
-#             total_cost = round(total_cost_float,3)
-            
-#             # print(str(price) + "*" + str(count_of_instances) + " = " +  str(price*count_of_instances))
-#             # print("Region:  " + region + "  Type:  " + i_types + "  Count:  " + str(count_region[region][i_types]["count"]) + "  Price:  " + str(pricing_json[region]["EC2"][i_types]["OnDemand"]["USD"]) + "  Cost:  " + str(price*count_of_instances))
-#             x.add_row(["", i_types, count_region[region][i_types]["count"], price, "", ""])
-#     # if total_coi == 0 and total_cost == 0:
-#     #     continue
-#     x.add_row(["", "", "", "", total_coi, total_cost])
-# print(x)
-
-with open('snapshots_price.json', 'r') as fp:
-    snapshot_pricing = json.load(fp)
-
-# for region in snapshot_pricing:        
-#     try:
-#         item =  snapshot_pricing[region]['Snapshot']['OnDemand']
-#     except KeyError:
-#         continue
-#     item =  snapshot_pricing[region]['Snapshot']['OnDemand']['USD']
-#     print(item) 
 
 prices = {}
-total_price = 0
-for region in snap_vol_region:
-    prices[region] = {}
-    for volume_id in snap_vol_region[region]:
-        # print(volume_id)
-        if volume_id in (vol_id for vol_id in recource_dict[region]['EBS']):
-            size = float(recource_dict[region]['EBS'][volume_id]['size'])
-            if region in (reg for reg in snapshot_pricing):
-                price =  float(snapshot_pricing[region]['Snapshot']['OnDemand']['USD'])
-                total_price = total_price + (price*size)
-                prices[region] = { "total price": total_price}
 
-    prices[region] *= len(snap_vol_region[region])
-print(prices)
+for region in count_region:
+    x.add_row(["", "", "", "", "", "",""])
+    x.add_row(["", "", "", "", "", "",""])
+    x.add_row(["", "", "", "", "", "",""])
+    x.add_row([region, "", "", "", "", "",""])
+    total_coi = 0
+    total_cost = 0
+    total_price = 0
+    price_per_month = 0
+    ppm = 0
+    length = 0
+    price =0
+    snap_price = 0
+    total_size = 0
+    s = 0
+
+    #Calculating Pricing for EC2 Instances
+    x.add_row(["", "EC2", "", "", "", "", ""])
+    for i_types in count_region[region]:
+        if i_types in (instance_type for instance_type in pricing_json[region]["EC2"]):
+
+            count_of_instances_float = float(count_region[region][i_types]["count"])
+            count_of_instances = round(count_of_instances_float, 3)
+
+            price_float = float(pricing_json[region]["EC2"][i_types]["OnDemand"]["USD"])
+            price = round(price_float, 3)
+            
+            total_coi = total_coi + (count_region[region][i_types]["count"])
+            total_cost_float = float(total_cost+(price*count_of_instances*744))
+            total_cost = round(total_cost_float,3)
+            x.add_row(["", "", i_types, count_region[region][i_types]["count"], price, "", ""])
+    x.add_row(["", "", "" , "", "", total_coi, total_cost])
+
+    #Calculating pricing for Snapshots
+    x.add_row(["", "Snapshots", "", "", "", "", ""])
+    x.add_row(["", "", "", "", "", "", ""])
+    for volume_id in snap_vol_region[region]:
+        length = len(snap_vol_region[region])
+        # if volume_id in (vol_id for vol_id in recource_dict[region]['EBS']):
+        #     s = recource_dict[region]['EBS'][volume_id]['size']
+        #     size = float(recource_dict[region]['EBS'][volume_id]['size'])
+        #     total_size = s + total_size
+        if region in (reg for reg in snapshot_pricing):
+            snap_price =  float(snapshot_pricing[region]['Snapshot']['OnDemand']['USD'])
+            total_price = total_price + (snap_price*length)   
+    price_per_month = total_price * 744
+    ppm = round(price_per_month, 3)
+    x.add_row(["", "", "", "", snap_price, length, ppm])
+
+    x.add_row(["", "Volume", "", "", "", "", ""])
+    if region in vol_cost_region:
+        volume_price = vol_cost_region[region]['Total Volume Cost']
+    x.add_row(["", "", "", "", "", "", volume_price])
+
+    x.add_row(["", "ELB", "", "", "", "", ""])
+    if region in elb_cost_region:
+        if 'total_elb_cost' in elb_cost_region[region] and 'price' in elb_cost_region[region] and 'total_instances' in elb_cost_region[region]:
+            cost = elb_cost_region[region]['total_elb_cost']
+            elb_price = elb_cost_region[region]['price']
+            elb_total_instances = elb_cost_region[region]['total_instances']
+            x.add_row(["", "", "", "", elb_price, elb_total_instances, cost])
+print(x)
