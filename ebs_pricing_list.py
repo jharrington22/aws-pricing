@@ -93,4 +93,5 @@ for page in resp_pages:
                                 "Max Volume Size": price_item["product"]["attributes"]["maxVolumeSize"],
                                 "USD": price
                                 } 
-pprint.pprint(resources)
+with open("ebs_pricing_list.json", "w+") as fp:
+    json.dump(resources,fp)
