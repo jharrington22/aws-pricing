@@ -137,7 +137,8 @@ for region in enabledRegions['Regions']:
         total_elbv2_cost = round(float( elbv2_cost * network_elb *730), 3)
         elbv2_cost_region[region_name] = {
             "Elbv2_Cost": total_elbv2_cost,
-            "Total_length": network_elb
+            "Total_length": network_elb,
+            "Cost": elbv2_cost
         }
     
     # Get all volumes for region_name and store in dict
@@ -166,7 +167,7 @@ for region in enabledRegions['Regions']:
             if recource_dict[region_name]["EBS"][vol_id]["volumeType"] in vol_type:
                 volume_cost = float(vol_pricing[region_name]['EBS'][vol_type]['OnDemand']['USD'])
                 total_volume_cost = total_volume_cost + volume_cost
-        tv = total_volume_cost * 730
+        tv = total_volume_cost * 744
         tvc = round(tv,3)
     vol_cost_region[region_name] = { 
         "Total Volume Cost": tvc,
@@ -259,7 +260,7 @@ for region in count_region:
             price = round(price_float, 3)
             
             total_coi = total_coi + (count_region[region][i_types]["count"])
-            total_cost_float = float(total_cost+(price*count_of_instances*730))
+            total_cost_float = float(total_cost+(price*count_of_instances*744))
             total_cost = round(total_cost_float,3)
             x.add_row(["", "", i_types, count_region[region][i_types]["count"], price, "", ""])
     x.add_row(["", "", "" , "", "", total_coi, total_cost])
@@ -276,7 +277,7 @@ for region in count_region:
         if region in (reg for reg in snapshot_pricing):
             snap_price =  float(snapshot_pricing[region]['Snapshot']['OnDemand']['USD'])
             total_price = total_price + (snap_price*length)   
-    price_per_month = total_price * 730
+    price_per_month = total_price * 744
     ppm = round(price_per_month, 3)
     x.add_row(["", "", "", "", snap_price, length, ppm])
 
@@ -300,6 +301,7 @@ for region in count_region:
         #     cost = elb_cost_region[region]['total_elb_cost']
         elbv2_price = elbv2_cost_region[region]['Elbv2_Cost']
         elbv2_total_instances = elbv2_cost_region[region]['Total_length']
-        x.add_row(["", "", "", "", "", elbv2_total_instances, elbv2_price])
+        elbv2_cost = elbv2_cost_region[region]['Cost']
+        x.add_row(["", "", "", "", elbv2_cost, elbv2_total_instances, elbv2_price])
 
 print(x)
