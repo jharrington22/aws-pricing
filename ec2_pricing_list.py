@@ -2,46 +2,20 @@ import boto3
 import json
 import pprint 
 import re
-import sys
-import pdb
 
+from constants import (
+    region_short_names,
+    resources,
+    aws_region
+)
 
-# with open('plist.txt') as fp:
-#     price_list =json.load(fp)
-not_instance_type = []
+from connection import (
+    region,
+    session,
+    ec2,
+    pricing_client
+) 
 
-
-region_short_names = {
-    "ap-southeast-1": "Asia Pacific (Singapore)",
-    "eu-central-1": "EU (Frankfurt)",
-    "eu-west-1": "EU (Ireland)",
-    "ap-northeast-1": "Asia Pacific (Tokyo)",
-    "ap-northeast-2": "Asia Pacific (Seoul)",
-    "ap-south-1": "Asia Pacific (Mumbai)",
-    "us-east-2": "US East (Ohio)",
-    "eu-north-1": "EU (Stockholm)",
-    "eu-west-3": "EU (Paris)",
-    "us-west-1": "US West (N. California)",
-    "ap-southeast-2": "Asia Pacific (Sydney)",
-    "us-east-1": "US East (N. Virginia)",
-    "eu-west-2": "EU (London)",
-    "sa-east-1": "South America (Sao Paulo)",
-    "us-west-2": "US West (Oregon)",
-    "ca-central-1": "Canada (Central)",
-    "ap-east-1": "Ap East",
-    "us-gov": "AWS GovCloud (US)",
-    "asia-pacific": "Asia Pacific (Hong Kong)",
-    "us-gov-east": "AWS GovCloud (US-East)",
-    "asia-pacific-ol": "Asia Pacific (Osaka-Local)"
-}
-
-resources = {}
-region = boto3.Session(region_name='us-east-1')
-session = boto3.Session(region_name='eu-west-2')
-ec2 = session.client('ec2')
-pricing_client = region.client('pricing')
-
-aws_region = list(region_short_names.keys())
 for region in aws_region:
     resources[region] = {
         "EC2" : {}
@@ -168,6 +142,7 @@ for page in resp_pages:
                             for price_dimension in price_dimensions:
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["RateCode"] = price_dimensions[price_dimension]['rateCode']
                                 resources[region]["EC2"][instance_type]["Reserved"][ri_purchase_option]["USD"] = price_dimensions[price_dimension]['pricePerUnit']["USD"]
-# with open('epl1.json', 'w+') as fp:
-#    json.dump(resources,fp)         
-pprint.pprint(resources['us-east-1']['EC2'])  
+
+#Write the result to a json file
+with open('epl1.json', 'w+') as fp:
+   json.dump(resources,fp)         
