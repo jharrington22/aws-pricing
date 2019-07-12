@@ -7,6 +7,17 @@ import os
 import pickle
 import pprint
 from prettytable import PrettyTable
+from fpdf import FPDF
+import argparse
+
+#For CLI
+parser = argparse.ArgumentParser()
+parser.add_argument("--allpricing", help="Print the pricing report for all regions")
+#parser.add_argument("region", help="Print the pricing report for all regions")
+parser.add_argument("--region", "-r", help="Print the pricing report for that region")
+parser.add_argument("--mem", help="Use temp stored table")
+
+args = parser.parse_args()
 
 #Creating Table
 x = PrettyTable()
@@ -19,6 +30,8 @@ x.align["Price per hour"] = "l"
 x.align["Total Instances"] = "l"
 x.align["Total EC2 cost per month"] = "l"
 
+
+
 resource_path = 'resource_dict_snp.p'
 # To fix datetime object not serializable
 class DateTimeEncoder(json.JSONEncoder):
@@ -30,7 +43,7 @@ class DateTimeEncoder(json.JSONEncoder):
 
 #To call all the regions available
 botoClient = boto3.client('ec2')
-enabledRegions = botoClient.describe_regions()
+
 sts_client = boto3.client('sts')
 sts_response = sts_client.get_caller_identity()
 user_account = sts_response['Account']
@@ -58,8 +71,23 @@ with open('snapshots_price.json', 'r') as fp:
 with open("elbv2_pricing.json","r") as elb2:
     elbv2_pricing = json.load(elb2)
 
+p = 'temp.p'
+if args.region:
+    #  td = {}
+    #  td[args.region] = enabledRegions
+    #  enabledRegions['Regions'] =  td
+    enabledRegions = [args.region]
+else:
+    
+    enabledRegions = [ d['RegionName'] for d in enabledRegions]
 
-for region in enabledRegions['Regions']:
+for region_name in enabledRegions:
+    # Load mem region_dict
+    if args.mem:
+        with open(p, 'rb') as f:
+            region_dict = pickle.load(f)
+        break
+
     count_list = {}
     count = 0
     snap_vol = []
@@ -94,8 +122,7 @@ for region in enabledRegions['Regions']:
     if os.path.exists(resource_path):
         exit
 
-    region_name = region['RegionName']
-    print("Collecting recource for region: {}".format(region_name))
+    # print("Collecting recource for region: {}".format(region_name))
     recource_dict[region_name] = {
         "ELB": {},
         "ELBV2": {},
@@ -118,7 +145,7 @@ for region in enabledRegions['Regions']:
     elb_network_client = boto3.client('elbv2',region_name=region_name)
 
     # ELBs and their attached instances
-    print("Collecting Classic ELB recource")
+    # print("Collecting Classic ELB recource")
     lb = client.describe_load_balancers()
     for l in lb['LoadBalancerDescriptions']:
         recource_dict[region_name]["ELB"][l['LoadBalancerName']]  = {
@@ -131,7 +158,7 @@ for region in enabledRegions['Regions']:
             unattached_instances = unattached_instances + 1
         if len(recource_dict[region_name]["ELB"][l['LoadBalancerName']]["instanceId"]) > 0:
             attached_instances = attached_instances + 1
-            
+        
         total_instances = attached_instances + unattached_instances
 
         for term in elb_pricing[region_name]['ELB']['OnDemand']:
@@ -145,7 +172,7 @@ for region in enabledRegions['Regions']:
         }
     
     # Network ELBs and their attached instances
-    print("Collecting Network ELB recource")
+    # print("Collecting Network ELB recource")
     lb = elb_network_client.describe_load_balancers()
     network_elb = len(lb['LoadBalancers'])
     recource_dict[region_name]["ELBV2"]  = {
@@ -284,6 +311,14 @@ for region in enabledRegions['Regions']:
     count_region[region_name] = count_list
 
 
+# If reading from mem than don't save over
+if not args.mem:
+    if os.path.exists(p):
+        os.remove(p)
+    with open(p, 'wb') as f:
+        pickle.dump(count_region, f)
+  
+
 for region in count_region:
     x.add_row(["", "", "", "", "", "",""])
     x.add_row(["", "", "", "", "", "",""])
@@ -362,4 +397,8 @@ for region in count_region:
         elbv2_cost = elbv2_cost_region[region]['Cost']
         x.add_row(["", "", "", "", elbv2_cost, elbv2_total_instances, elbv2_price])
 
+
 print(x)
+
+if args.allpricing:
+    print(x)
