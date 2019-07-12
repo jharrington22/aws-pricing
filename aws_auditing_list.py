@@ -7,8 +7,8 @@ import os
 import pickle
 import pprint
 from prettytable import PrettyTable
-from fpdf import FPDF
 import argparse
+import sys
 
 #For CLI
 parser = argparse.ArgumentParser()
@@ -31,6 +31,37 @@ x.align["Total Instances"] = "l"
 x.align["Total EC2 cost per month"] = "l"
 
 
+class AWSAudit():
+    def __init__(self):
+        self.resources = {}
+        self.conn = self.connect("ec2", "us-east-1")
+        self.aws_regions = self.conn.describe_regions()
+        self.initializeResourcesDict(self.aws_regions)
+
+    def connect(self, service, region_name=None):
+        return boto3.client(service, region_name)
+
+    def initializeResourceDict(self, regions):
+        for region_name in regions:
+            resources_dict[region_name] = {
+                "ELB": {},
+                "ELBV2": {},
+                "EC2": {},
+                "EBS": {
+                    "orphaned_snapshots": []
+                }
+            }
+        return resources_dict
+
+    def get_ec2_resources():
+        for region in self.aws_regions:
+            conn = self.connect("ec2", region_name=region)
+            instance_list = conn.describe_instances()
+
+
+aws_audit = AWSAudit()
+
+aws_audit.get_ec2_resources()
 
 resource_path = 'resource_dict_snp.p'
 # To fix datetime object not serializable
