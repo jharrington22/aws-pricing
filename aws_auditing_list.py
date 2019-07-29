@@ -76,7 +76,6 @@ class AWSAudit:
             self.classic_elb,
             self.network_elb,
             self.volume_ebs,
-            self.snapshot_ebs,
         )
 
     def region(self, aws_region):
@@ -206,7 +205,7 @@ class AWSAudit:
             for elbv2_price in elbv2_pricing[region_name]['ELB']['OnDemand']:
                 elbv2_cost = float(elbv2_pricing[region_name]['ELB']['OnDemand']['USD'])
                 total_elbv2_cost = round(
-                    float(elbv2_cost * network_elb *  self.per_month_hours),
+                    float(elbv2_cost * network_elb * self.per_month_hours),
                     3,
                 )
                 self.network_elb[region_name] = {
@@ -221,16 +220,9 @@ class AWSAudit:
         user_account = sts_response['Account']
 
         for region_name in regions:
-            snap_vol = []
             self.snap_vol_id[region_name] = {}
-            self.volume_ebs[region_name] = {
-                'attached': {},
-                'unattached': {},
-            }
-            attached_devices = {}
-            unattached_devices = {}
             self.snapshot_ebs[region_name] = {}
-            snap_vol = []
+            
             conn = self.connect_service_region(
                 'ec2',
                 region_name=region_name
@@ -256,35 +248,47 @@ class AWSAudit:
                 }
 
             # Get all snapshots and assign them to their volume
-            orphaned_snapshot_count = 0
-            snapshot_count = 0
+            
             for snapshot in snapshots['Snapshots']:
                 snap = snapshot['VolumeId']
-                if (
-                    snap
-                    in self.dictionary[region_name]['EBS']
-                ):
-                    self.dictionary[region_name]['EBS'][
-                        snap
-                    ]['snapshots'].append(
-                        snapshot['SnapshotId']
-                    )
-                    if snap not in snap_vol:
-                        snap_vol.append(snap)
-                        snapshot_count += 1
+                if (snap in self.dictionary[region_name]['EBS']):
+                    self.dictionary[region_name]['EBS'][snap]['snapshots'].append(snapshot['SnapshotId'])
                 else:
-                    self.dictionary[region_name]['EBS'][
-                        'orphaned_snapshots'
-                    ].append(snapshot['SnapshotId'])
-                    orphaned_snapshot_count += 1
+                    self.dictionary[region_name]['EBS']['orphaned_snapshots'].append(snapshot['SnapshotId'])
+              
 
-            self.snap_vol_id[region_name] = snap_vol
-
-            self.snapshot_ebs[region_name] = {
-                'sc': snapshot_count,
-                'osc': orphaned_snapshot_count,
-            }
+            
+    def count_snapshots(self, count_type, region):
+        self.snap_vol_id = []
+        sts_response = self.sts_client.get_caller_identity()
+        user_account = sts_response['Account']
+        conn = self.connect_service_region(
+                'ec2',
+                region_name=region
+            )
+        snapshots = conn.describe_snapshots(
+                Filters=[
+                    {
+                        'Name': 'owner-id',
+                        'Values': [str(user_account)],
+                    }
+                ]
+            )
+        for snapshot in snapshots['Snapshots']:
+            snap = snapshot['VolumeId']
+            if (snap in self.dictionary[region]['EBS']):
+                if snap not in self.snap_vol_id:
+                    self.snap_vol_id.append(snap)
+        
+        if count_type == 'attached':
+            snapshot_count = len(self.snap_vol_id)
+            return snapshot_count
+        else:
+            orphaned_snapshot_count = len(self.dictionary[region]['EBS']['orphaned_snapshots'])
+            return orphaned_snapshot_count
+        
     
+
     # Count attached and orphaned volumes
     def list_volumes(self, regions):
         conn = self.connect_service_region(
@@ -333,8 +337,7 @@ class AWSAudit:
         regions,
         classic_elb,
         network_elb,
-        volume,
-        snapshot,
+        volume
     ):
         with open('epl1.json', 'r') as fp:
             pricing_json = json.load(fp)
@@ -343,8 +346,9 @@ class AWSAudit:
         with open('ebs_pricing_list.json', 'r') as ebs:
             vol_pricing = json.load(ebs)
 
-        # Pricing
+    #     # Pricing
         for region in regions:
+        
             x.add_row(
                 [
                     region,
@@ -359,8 +363,6 @@ class AWSAudit:
             total_instances = 0
             total_size = 0
             price_per_month = 0
-            snapshot_count_length = 0
-            orphaned_snapshot_count_length = 0
             price = 0
             total_cost = 0.00
             unattached_volume_cost = 0.00
@@ -384,7 +386,7 @@ class AWSAudit:
             for i_type in count_of_instances:
                 if i_type in (instance_type for instance_type in pricing_json[region]['EC2']):
                     price = round(float(pricing_json[region]['EC2'][i_type]['OnDemand']['USD']),3)
-                    total_cost = round(float(total_cost + (price * count_of_instances[i_type]['count'])),3)
+                    total_cost = round(float(total_cost + (price * count_of_instances[i_type]['count'])), 3)
                     total_instances += count_of_instances[i_type]['count']
 
                 x.add_row(
@@ -621,12 +623,10 @@ class AWSAudit:
                     ''
                 ]
             )
-            if region in snapshot:
-                snapshot_count_length = snapshot[region]['sc']
-                orphaned_snapshot_count_length = snapshot[region]['osc']
+            attached_snap = self.count_snapshots('attached', region) 
             if region in (reg for reg in snapshot_pricing):
-                price = float( snapshot_pricing[region]['Snapshot']['OnDemand']['USD'])
-            for volume_id in self.snap_vol_id[region]:
+                price = float(snapshot_pricing[region]['Snapshot']['OnDemand']['USD'])
+            for volume_id in self.snap_vol_id:
                 if volume_id in (vol_id for vol_id in self.dictionary[region]['EBS']):
                     size = self.dictionary[region]['EBS'][volume_id]['size']
                     total_size += size
@@ -639,23 +639,24 @@ class AWSAudit:
                     '',
                     '',
                     'snapshots',
-                    snapshot_count_length,
+                    attached_snap,
                     price,
                     total_size,
                     price_per_month,
                 ]
             )
+            orphaned_snap = self.count_snapshots('unattached', region) 
             x.add_row(
                 [
                     '',
                     '',
                     'orphaned snapshots',
-                    orphaned_snapshot_count_length,
+                    orphaned_snap,
                     price,
                     '',
                     round(
                         float(price
-                            * orphaned_snapshot_count_length), 3)
+                            * orphaned_snap), 3)
                 ]
             )
 
