@@ -50,12 +50,8 @@ class AWSAudit:
     def __init__(self):
         self.resources = {}
         self.dictionary = {}
-        self.ec2_counts = {}
-        self.classic_elb = {}
-        self.network_elb = {}
         self.volume_ebs = {}
-        self.snapshot_ebs = {}
-        self.snap_vol_id = {}
+        self.snap_vol_id = []
         self.aws_region = []
         self.attached_vol_list = []
         self.unattached_vol_list = []
@@ -72,8 +68,6 @@ class AWSAudit:
         self.get_ebs_resources(self.aws_regions)
         self.get_price(
             self.aws_regions,
-            self.classic_elb,
-            self.network_elb,
             self.volume_ebs,
         )
 
@@ -128,42 +122,15 @@ class AWSAudit:
                         'instance_state': i['State']['Name'],
                         'instance_type': i['InstanceType']
                     }
-                    
-    def list_instances(self, state, region):
-        instances_per_state = []
-        for i in self.dictionary[region]['EC2']:
-            if self.dictionary[region]['EC2'][i]['instance_state'] == state and i not in instances_per_state:
-                instances_per_state.append(i)
-               
-        return(instances_per_state)
-        
-    def count_instance_types(self, instances_per_state, region):
-        count_instance_type = {}
-        for instance_id in instances_per_state:
-            if instance_id in self.dictionary[region]['EC2']:
-                instance_type = self.dictionary[region]['EC2'][instance_id]['instance_type']
-                if instance_type not in count_instance_type:
-                    count_instance_type[instance_type] = {'count': 1}
-                else:
-                    count_instance_type[instance_type]['count'] += 1
-        return(count_instance_type)
 
     # Get Classic ELB
     def get_classic_elb_resources(self, regions):
-        with open('elb_pricing.json', 'r') as elb:
-            elb_pricing = json.load(elb)
-
         for region_name in regions:
-            self.classic_elb[region_name] = {}
             conn = self.connect_service_region(
                 'elb',
                 region_name=region_name
             )
             lb = conn.describe_load_balancers()
-            total_instances = len(
-                lb['LoadBalancerDescriptions']
-            )
-
             for l in lb['LoadBalancerDescriptions']:
                 self.dictionary[region_name]['ELB'][l['LoadBalancerName']] = {'instanceId': []}
 
@@ -172,25 +139,9 @@ class AWSAudit:
                 else:
                     self.dictionary[region_name]['ELB'][l['LoadBalancerName']]['instanceId'] = []
 
-            for term in elb_pricing[region_name]['ELB']['OnDemand']:
-                elb_price = float(elb_pricing[region_name]['ELB']['OnDemand']['USD'])
-                total_elb_cost = round(float(elb_price * total_instances * self.per_month_hours),3)
-
-            self.classic_elb[region_name] = {
-                'total_instances': total_instances,
-                'price': elb_price,
-                'total_elb_cost': total_elb_cost,
-            }
-
     # Get Network ELB
     def get_network_elb_resources(self, regions):
-        with open('elbv2_pricing.json', 'r') as elb2:
-            elbv2_pricing = json.load(elb2)
-
         for region_name in regions:
-            total_elbv2_cost = 0
-            self.network_elb[region_name] = {}
-
             conn = self.connect_service_region(
                 'elbv2',
                 region_name=region_name
@@ -201,27 +152,12 @@ class AWSAudit:
                 'Length': network_elb
             }
 
-            for elbv2_price in elbv2_pricing[region_name]['ELB']['OnDemand']:
-                elbv2_cost = float(elbv2_pricing[region_name]['ELB']['OnDemand']['USD'])
-                total_elbv2_cost = round(
-                    float(elbv2_cost * network_elb * self.per_month_hours),
-                    3,
-                )
-                self.network_elb[region_name] = {
-                    'Elbv2_Cost': total_elbv2_cost,
-                    'Total_length': network_elb,
-                    'Cost': elbv2_cost,
-                }
-
     # Get Volumes and Snapshots
     def get_ebs_resources(self, regions):
         sts_response = self.sts_client.get_caller_identity()
         user_account = sts_response['Account']
 
-        for region_name in regions:
-            self.snap_vol_id[region_name] = {}
-            self.snapshot_ebs[region_name] = {}
-            
+        for region_name in regions: 
             conn = self.connect_service_region(
                 'ec2',
                 region_name=region_name
@@ -247,47 +183,59 @@ class AWSAudit:
                 }
 
             # Get all snapshots and assign them to their volume
-            
             for snapshot in snapshots['Snapshots']:
                 snap = snapshot['VolumeId']
                 if (snap in self.dictionary[region_name]['EBS']):
                     self.dictionary[region_name]['EBS'][snap]['snapshots'].append(snapshot['SnapshotId'])
                 else:
-                    self.dictionary[region_name]['EBS']['orphaned_snapshots'].append(snapshot['SnapshotId'])
-              
+                    self.dictionary[region_name]['EBS']['orphaned_snapshots'].append(snapshot['SnapshotId'])            
+    
+    # List EC2 instances                   
+    def list_instances(self, state, region):
+        instances_per_state = []
+        for i in self.dictionary[region]['EC2']:
+            if self.dictionary[region]['EC2'][i]['instance_state'] == state and i not in instances_per_state:
+                instances_per_state.append(i)
+               
+        return(instances_per_state)
+    
+    # Count EC2 Instances   
+    def count_instance_types(self, instances_per_state, region):
+        count_instance_type = {}
+        for instance_id in instances_per_state:
+            if instance_id in self.dictionary[region]['EC2']:
+                instance_type = self.dictionary[region]['EC2'][instance_id]['instance_type']
+                if instance_type not in count_instance_type:
+                    count_instance_type[instance_type] = {'count': 1}
+                else:
+                    count_instance_type[instance_type]['count'] += 1
+        return(count_instance_type)
+    
+    # Count Classic ELB's 
+    def count_classic_elb(self, region):
+        return (len(self.dictionary[region]['ELB']))
 
-            
+    # Count Network ELB's          
+    def count_network_elb(self, region):
+        return (self.dictionary[region]['ELBV2']['Length'])
+
+    # Count orphaned and attached snapshots      
     def count_snapshots(self, count_type, region):
-        self.snap_vol_id = []
-        sts_response = self.sts_client.get_caller_identity()
-        user_account = sts_response['Account']
-        conn = self.connect_service_region(
-                'ec2',
-                region_name=region
-            )
-        snapshots = conn.describe_snapshots(
-                Filters=[
-                    {
-                        'Name': 'owner-id',
-                        'Values': [str(user_account)],
-                    }
-                ]
-            )
-        for snapshot in snapshots['Snapshots']:
-            snap = snapshot['VolumeId']
-            if (snap in self.dictionary[region]['EBS']):
-                if snap not in self.snap_vol_id:
-                    self.snap_vol_id.append(snap)
+        attached_snapshot_count = 0
+        for vol_id in self.dictionary[region]['EBS']:
+            if vol_id == 'orphaned_snapshots':
+                continue
+            if vol_id in self.dictionary[region]['EBS']:
+                if len(self.dictionary[region]['EBS'][vol_id]['snapshots']) > 0:
+                    self.snap_vol_id.append(vol_id)
+                    attached_snapshot_count += 1   
         
         if count_type == 'attached':
-            snapshot_count = len(self.snap_vol_id)
-            return snapshot_count
+            return attached_snapshot_count
         else:
             orphaned_snapshot_count = len(self.dictionary[region]['EBS']['orphaned_snapshots'])
             return orphaned_snapshot_count
-        
-    
-
+   
     # Count attached and orphaned volumes
     def list_volumes(self, regions):
         conn = self.connect_service_region(
@@ -328,14 +276,11 @@ class AWSAudit:
         
         self.volume_ebs[region] = devices_dict
         return self.volume_ebs[region]
-        
-    
+   
     # Get monthly estimated cost for AWS resources
     def get_price(
         self,
         regions,
-        classic_elb,
-        network_elb,
         volume
     ):
         with open('epl1.json', 'r') as fp:
@@ -344,8 +289,11 @@ class AWSAudit:
             snapshot_pricing = json.load(fp)
         with open('ebs_pricing_list.json', 'r') as ebs:
             vol_pricing = json.load(ebs)
-
-    #     # Pricing
+        with open('elbv2_pricing.json', 'r') as elb2:
+            elbv2_pricing = json.load(elb2)
+        with open('elb_pricing.json', 'r') as elb:
+            elb_pricing = json.load(elb)
+        # Pricing
         for region in regions:
         
             x.add_row(
@@ -424,27 +372,23 @@ class AWSAudit:
                     ''
                 ]
             )
-            if (
-                region in classic_elb
-                and 'total_elb_cost' in classic_elb[region]
-                and 'price' in classic_elb[region]
-                and 'total_instances' in classic_elb[region]
-            ):
-                x.add_row(
-                    [
-                        '',
-                        '',
-                        '',
-                        '',
-                        classic_elb[region]['price'],
-                        classic_elb[region][
-                            'total_instances'
-                        ],
-                        classic_elb[region][
-                            'total_elb_cost'
-                        ],
-                    ]
-                )
+            
+            classic_elb_instances = self. count_classic_elb(region)
+            for term in elb_pricing[region]['ELB']['OnDemand']:
+                price = float(elb_pricing[region]['ELB']['OnDemand']['USD'])
+                total_cost = round(float(price * total_instances * self.per_month_hours),3)
+
+            x.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    price,
+                    classic_elb_instances,
+                    total_cost,
+                ]
+            )
 
         # Network ELB pricing
             x.add_row(
@@ -458,18 +402,24 @@ class AWSAudit:
                     ''
                 ]
             )
-            if region in network_elb:
-                x.add_row(
-                    [
-                        '',
-                        '',
-                        '',
-                        '',
-                        network_elb[region]['Cost'],
-                        network_elb[region]['Total_length'],
-                        network_elb[region]['Elbv2_Cost'],
-                    ]
+            network_elb_instances = self.count_network_elb(region)
+            for elbv2_price in elbv2_pricing[region]['ELB']['OnDemand']:
+                price = float(elbv2_pricing[region]['ELB']['OnDemand']['USD'])
+                total_cost = round(
+                    float(price * network_elb_instances * self.per_month_hours),
+                    3,
                 )
+            x.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    price,
+                    network_elb_instances,
+                    total_cost,
+                ]
+            )
 
         # Volume pricing
             x.add_row(
