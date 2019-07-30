@@ -4,7 +4,6 @@ import boto3
 import json
 from datetime import datetime
 import os
-import pickle
 import pprint
 from prettytable import PrettyTable
 import argparse
