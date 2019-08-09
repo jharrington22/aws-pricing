@@ -370,7 +370,7 @@ class AWSAudit:
                 ]
             )
             
-            classic_elb_instances = self. count_classic_elb(region)
+            classic_elb_instances = self.count_classic_elb(region)
             price = float(elb[region]['ELB']['OnDemand']['USD'])
             total_cost = round(float(price * classic_elb_instances * self.per_month_hours),3)
 
