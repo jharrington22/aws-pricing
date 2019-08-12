@@ -29,11 +29,7 @@ class pricing_info:
             }
         self.pricing_dict()
         self.paginator_connection()
-        # self.price_list_EBS()
-        # self.price_list_ELBV2()
-        # self.price_list_ELB()
-        # self.price_list_EC2()
-                
+    
     def pricing_dict(self):
         for region in aws_region:
             self.pricing[region] = {
