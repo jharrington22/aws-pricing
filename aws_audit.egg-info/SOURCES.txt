@@ -1,0 +1,12 @@
+README.md
+setup.py
+aws_audit/__init__.py
+aws_audit/__main__.py
+aws_audit/all_pricing.py
+aws_audit/connection.py
+aws_audit/constants.py
+aws_audit.egg-info/PKG-INFO
+aws_audit.egg-info/SOURCES.txt
+aws_audit.egg-info/dependency_links.txt
+aws_audit.egg-info/requires.txt
+aws_audit.egg-info/top_level.txt

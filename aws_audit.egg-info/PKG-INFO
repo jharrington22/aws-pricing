@@ -1,0 +1,17 @@
+Metadata-Version: 1.1
+Name: aws-audit
+Version: 0.0.1
+Summary: A script to audit AWS ,resources and total spending
+Home-page: https://github.com/openshift/aws-pricing/
+Author: Shruti Jain
+Author-email: shrjain@redhat.com
+License: Apache License 2.0
+Description: # aws-pricing
+        Provide an interface to the AWS pricing API
+        
+Keywords: aws audit
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Topic :: AWS Pricing
+Classifier: License :: OSI Approved :: Apache License 2.0
+Classifier: Programming Language :: Python :: 3.7.3

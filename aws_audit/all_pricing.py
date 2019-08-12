@@ -4,12 +4,12 @@ import pprint
 import re
 import sys
 
-from constants import (
+from .constants import (
     region_short_names,
     aws_region
 )
 
-from connection import (
+from .connection import (
     region,
     session,
     ec2,
