@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # Provides attached/unattached instances for ELB for all regions
 import boto3
 import json
@@ -8,6 +8,7 @@ import pprint
 from prettytable import PrettyTable
 import argparse
 import sys
+# from aws_audit.all_pricing import pricing_info
 from all_pricing import pricing_info
 
 # Parser for command line
@@ -18,7 +19,13 @@ parser.add_argument(
     help='pricing report for all regions',
 )
 parser.add_argument(
-    '--region', '-r', help='pricing report for that region'
+    'region', help='pricing report for that region'
+)
+parser.add_argument(
+    '--pricing', '-p', help='get pricing for a region', action = 'store_true'
+)
+parser.add_argument(
+    '--resources', '-r', help='get reources for a region', action = 'store_true'
 )
 args = parser.parse_args()
 
@@ -35,6 +42,16 @@ x.field_names = [
 ]
 x.align = 'l'
 
+y = PrettyTable()
+y.field_names = [
+    'Region',
+    'Service',
+    'Instance_Type',
+    'Count',
+    'Price per hour',
+    'Total Instances/Size'
+]
+y.align = 'l'
 
 # To fix datetime object not serializable
 class DateTimeEncoder(json.JSONEncoder):
@@ -67,10 +84,18 @@ class AWSAudit:
         self.get_classic_elb_resources(self.aws_regions)
         self.get_network_elb_resources(self.aws_regions)
         self.get_ebs_resources(self.aws_regions)
-        self.get_price(
-            self.aws_regions,
-            self.volume_ebs,
-        )
+        if args.resources:
+            self.get_resources(
+                self.aws_regions,
+                self.volume_ebs,
+            )
+
+        if args.pricing:
+            self.get_price(
+                self.aws_regions,
+                self.volume_ebs,
+            )
+        
 
     def region(self, aws_region):
         if args.region:
@@ -604,6 +629,269 @@ class AWSAudit:
             )
 
         print(x)
+    
+    # Get monthly estimated cost for AWS resources
+    def get_resources(
+        self,
+        regions,
+        volume
+    ):  
+        for region in regions:
+            y.add_row(
+                [
+                    region,
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            total_instances = 0
+            size = 0
+            unattached_length = 0
+            attached_length = 0
+
+        # EC2 pricing
+            y.add_row(
+                [
+                    '',
+                    'EC2 Instances',
+                    '',
+                    '',
+                    '',
+                    '',
+                ]
+            )
+            count_of_instances = self.count_instance_types(self.list_instances(self.state, region), region)
+            for i_type in count_of_instances:
+                total_instances += count_of_instances[i_type]['count']
+
+                y.add_row(
+                    [
+                        '',
+                        '',
+                        i_type,
+                        count_of_instances[i_type]['count'],
+                        '',
+                        '',
+                    ]
+                )
+
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    total_instances,
+                ]
+            )
+            
+        # Classic ELB pricing
+            y.add_row(
+                [
+                    '',
+                    'ELB Classic',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            
+            classic_elb_instances = self.count_classic_elb(region)
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    classic_elb_instances,
+                ]
+            )
+
+        # Network ELB pricing
+            y.add_row(
+                [
+                    '',
+                    'ELB Network',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            network_elb_instances = self.count_network_elb(region)
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    network_elb_instances
+                ]
+            )
+
+        # Volume pricing
+            y.add_row(
+                [
+                    '',
+                    'Volume',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            y.add_row(
+                [
+                    '',
+                    '',
+                    'Attached Volume',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            attached_vol_dict = self.count_volume_types(
+                self.list_volumes(region),
+                'attached',
+                region
+                )
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            for volume_type in attached_vol_dict:
+                attached_length += attached_vol_dict[volume_type]['count']
+                y.add_row(
+                    [
+                        '',
+                        '',
+                        volume_type,
+                        attached_vol_dict[volume_type]['count'],
+                        '',
+                        attached_vol_dict[volume_type]['size']
+                    ]
+                )
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    'Total Attached Volumes',
+                    attached_length
+                ]
+            )
+            
+            y.add_row(
+                [
+                    '',
+                    '',
+                    'Orphaned Volume',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            unattached_vol_dict = self.count_volume_types(
+                self.list_volumes(region),
+                'unattached',
+                region
+                )
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            for volume_type in unattached_vol_dict:
+                unattached_length += unattached_vol_dict[volume_type]['count']
+                
+                y.add_row(
+                    [
+                        '',
+                        '',
+                        volume_type,
+                        unattached_vol_dict[volume_type]['count'],
+                        '',
+                        unattached_vol_dict[volume_type]['size']
+                    ]
+                )
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    'Total Orphaned Volumes',
+                    unattached_length
+                ]
+            )
+            
+            # Snapshot pricing
+            y.add_row(
+                [
+                    '',
+                    'Snapshots',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            y.add_row(
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            )
+            attached_snap = self.count_snapshots('attached', region)
+            for volume_id in self.snap_vol_id:
+                if volume_id in (vol_id for vol_id in self.dictionary[region]['EBS']):
+                    size += self.dictionary[region]['EBS'][volume_id]['size']
+            y.add_row(
+                [
+                    '',
+                    '',
+                    'snapshots',
+                    attached_snap,
+                    '',
+                    size
+                ]
+            )
+            orphaned_snap = self.count_snapshots('unattached', region) 
+            y.add_row(
+                [
+                    '',
+                    '',
+                    'orphaned snapshots',
+                    orphaned_snap,
+                    '',
+                    ''
+                ]
+            )
+
+        print(y)
 
 
 aws_audit = AWSAudit()
