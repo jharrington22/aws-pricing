@@ -307,7 +307,7 @@ class AWSAudit:
         regions,
         volume
     ):        
-        p_info = pricing_info()
+        p_info = PricingInfo()
         elbv2 = p_info.price_list_ELBV2()
         elb = p_info.price_list_ELB()
         vol_pricing = p_info.price_list_EBS()
