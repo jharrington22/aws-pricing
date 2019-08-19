@@ -11,11 +11,11 @@ import sys
 from aws_audit.all_pricing import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    '--allpricing',
-    '-a',
-    help='pricing report for all regions',
-)
+# parser.add_argument(
+#     '--allpricing',
+#     '-a',
+#     help='pricing report for all regions',
+# )
 parser.add_argument(
     'region', help='pricing report for that region'
 )
@@ -23,7 +23,13 @@ parser.add_argument(
     '--pricing', '-p', help='get pricing for a region', action = 'store_true'
 )
 parser.add_argument(
-    '--resources', '-r', help='get reources for a region', action = 'store_true'
+    '--resources', '-r', help='get resources for a region', action = 'store_true'
+)
+parser.add_argument(
+    '--orphaned_volume', '-ov', help='get volume IDs with no Instance Ids attached', action = 'store_true'
+)
+parser.add_argument(
+    '--orphaned_snapshot', '-os', help='get snapshot IDs with no parent volume', action = 'store_true'
 )
 args = parser.parse_args()
 
@@ -93,7 +99,14 @@ class AWSAudit:
                 self.aws_regions,
                 self.volume_ebs,
             )
+
+        if args.orphaned_volume:
+            self.list_volumes(self.aws_regions)
+            pprint.pprint(self.unattached_vol_list)
         
+        if args.orphaned_snapshot:
+            pprint.pprint(self.dictionary[args.region]['EBS']['orphaned_snapshots'])
+
 
     def region(self, aws_region):
         if args.region:
@@ -262,9 +275,10 @@ class AWSAudit:
    
     # Count attached and orphaned volumes
     def list_volumes(self, regions):
+        region_name = regions[0]
         conn = self.connect_service_region(
                 'ec2',
-                region_name=regions
+                region_name=region_name
             )
         volumes = conn.describe_volumes()
         for vol in volumes['Volumes']:
