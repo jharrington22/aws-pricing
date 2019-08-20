@@ -19,9 +19,8 @@ https://pypi.org/project/PrettyTable#downloads
 argparse
 https://docs.python.org/3/library/argparse.html
 
-## Usage
+## CLI Tools
 
-AWS CLI Tools
 ```
 
 arguments: 
