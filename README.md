@@ -6,8 +6,6 @@ A python package to audit the AWS Resources and total spending by
 
 ### Installation
 
-.. code-block:: sh
-
     $ pip install aws_auditing_list
 
 ### Requirements 
@@ -24,6 +22,7 @@ https://docs.python.org/3/library/argparse.html
 ## Usage
 
 AWS CLI Tools
+```
 
 arguments: 
 -h, --help              show this help message and exit
@@ -37,14 +36,19 @@ arguments:
                         get volume IDs with no Instance Ids attached
 --orphaned_snapshot, -os 
                         get snapshot IDs with no parent volume
+```
 
 ## Usage
 
 To get the pricing of the resources in a particular region
+```
 usage: python3 aws_auditing_list [--region] [-p]
+```
 
 To get the resource list in a particular region
+```
 usage: python3 aws_auditing_list [--region] [-r]
+```
 
 ## Credentials
 In the aws director @localhost: ~/.aws/ 
