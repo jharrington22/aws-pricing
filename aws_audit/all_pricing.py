@@ -4,19 +4,19 @@ import pprint
 import re
 import sys
 
-from constants import (
+from .constants import (
     region_short_names,
     aws_region
 )
 
-from connection import (
+from .connection import (
     region,
     session,
     ec2,
     pricing_client
 )
 
-class pricing_info:
+class PricingInfo:
     def __init__(self):
         self.pricing = {}
         self.price_item = []
@@ -29,7 +29,7 @@ class pricing_info:
             }
         self.pricing_dict()
         self.paginator_connection()
-
+                
     def pricing_dict(self):
         for region in aws_region:
             self.pricing[region] = {
@@ -283,4 +283,4 @@ class pricing_info:
                                     self.pricing[region]['EC2'][instance_type]['Reserved'][ri_purchase_option]['USD'] = price_dimensions[price_dimension]['pricePerUnit']['USD']
         return self.pricing       
      
-price = pricing_info()
+price = PricingInfo()

@@ -15,6 +15,7 @@ setup(
     keywords="aws audit",
     url="https://github.com/openshift/aws-pricing/",
     packages=['aws_audit'],
+    scripts=['bin/aws_auditing_list'],
     long_description=read('README.md'),
     install_requires=[
         'boto3>=1.9.163',
